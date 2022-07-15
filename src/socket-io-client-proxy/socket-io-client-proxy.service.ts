@@ -1,11 +1,17 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { ClientProxy, ReadPacket, WritePacket } from '@nestjs/microservices';
+import { RequestStoreProvider } from 'src/request-store.provider';
+import { v4 as uuidv4 } from 'uuid'; // this lib used to generate unique ID for each request
 import { SocketIoClientProvider } from 'src/socket-io-client.provider';
+import { Subject } from 'rxjs';
+import { timeout, take } from 'rxjs/operators';
 
 @Injectable()
 export class SocketIoClientProxyService extends ClientProxy {
   @Inject(SocketIoClientProvider)
   private client: SocketIoClientProvider;
+  @Inject(RequestStoreProvider)
+  private requestStore: RequestStoreProvider;
 
   async connect(): Promise<any> {
     this.client.getSocket();
@@ -28,6 +34,7 @@ export class SocketIoClientProxyService extends ClientProxy {
   }
 
   /**
+   * Implement publish method
    * this method will be call when use SocketIoClientProxyService.send
    * can be use to implement request-response
    * @param packet
@@ -37,14 +44,39 @@ export class SocketIoClientProxyService extends ClientProxy {
   publish(
     packet: ReadPacket<any>,
     callback: (packet: WritePacket<any>) => void,
-  ): Function {
-    console.log('message:', packet);
+  ): CallableFunction {
+    let data = packet.data;
+    let requestId = '';
+    if (typeof data.requestId === 'undefined') {
+      requestId = uuidv4();
+      data = {
+        ...packet.data,
+        requestId: requestId,
+      };
+    } else {
+      requestId = packet.data.requestId;
+    }
+    const request$ = new Subject();
+    this.requestStore.store.set(requestId, request$);
+    this.requestStore.store
+      .get(requestId)
+      .pipe(timeout(30000), take(1))
+      .subscribe({
+        error: (err) => callback({ err }),
+        next: (response) => {
+          callback({ response });
+        },
+        complete: () => {
+          this.requestStore.store.delete(requestId);
+        },
+      });
 
-    // In a real-world application, the "callback" function should be executed
-    // with payload sent back from the responder. Here, we'll simply simulate (5 seconds delay)
-    // that response came through by passing the same "data" as we've originally passed in.
-    setTimeout(() => callback({ response: packet.data }), 5000);
-
-    return () => console.log('teardown');
+    this.client.getSocket().emit(packet.pattern, {
+      ...packet.data,
+      requestCustomId: requestId,
+    });
+    return () => {
+      this.requestStore.store.get(requestId);
+    };
   }
 }

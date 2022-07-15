@@ -1,6 +1,7 @@
 import { Controller, Get } from '@nestjs/common';
 import { AppService } from './app.service';
 import { SocketIoClientProxyService } from './socket-io-client-proxy/socket-io-client-proxy.service';
+import { take } from 'rxjs/operators';
 
 @Controller()
 export class AppController {
@@ -24,12 +25,17 @@ export class AppController {
   }
 
   @Get('test-send')
-  testSendAction() {
-    this.socketIoClientProxyService
-      .send('greeting', 'Greeting from action test-emit')
-      .subscribe((rs) => {
-        console.log('after send', rs);
-      });
-    return 'ok';
+  async testSendAction() {
+    const requestParams = {
+      sendTime: Date.now(),
+    };
+    const socketResponse = await this.socketIoClientProxyService
+      .send('test-request', requestParams)
+      .pipe(take(1))
+      .toPromise();
+    return {
+      requestParams,
+      socketResponse,
+    };
   }
 }
