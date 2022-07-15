@@ -44,4 +44,7 @@ $ npm run start:dev
 # production mode
 $ npm run start:prod
 ```
+
 # simple-req-res-nestjs-socketio
+
+Detail read this doc: https://keyyuki.medium.com/implement-request-response-socket-io-client-to-nestjs-microservice-5651832486ef
