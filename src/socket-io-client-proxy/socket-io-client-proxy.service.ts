@@ -73,7 +73,7 @@ export class SocketIoClientProxyService extends ClientProxy {
 
     this.client.getSocket().emit(packet.pattern, {
       ...packet.data,
-      requestCustomId: requestId,
+      requestId: requestId,
     });
     return () => {
       this.requestStore.store.get(requestId);
